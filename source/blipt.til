@@ -3,20 +3,33 @@ type blipt.driver {
         print.error "driver.init"
         return [dict
             . (current_page "home")
-            . (history ())
             . (current_title $title)
             . (doc ".document.body")
+            . (history ())
+            . (link_commands [dict])
+            . (element_index 0)
         ]
     }
 
     # Some dynamic procedures:
-    range (h1 h2 h3 h4 p) | foreach tag {
+    # For automatic line-breaking tags:
+    range (h1 h2 h3 h4 h5) | foreach tag {
         eval 'set subprogram {
             add \$driver "\$text\\n" $tag
         }'
         print.error "proc $tag"
         proc $tag (driver text) $subprogram
     }
+    # No line-breaking tags:
+    range (p big small italic bold overstrike fixed) | foreach tag {
+        eval 'set subprogram {
+            add \$driver "\$text\\n" $tag
+        }'
+        print.error "proc $tag"
+        proc $tag (driver text) $subprogram
+    }
+
+    print.error "Dynamic procedures registered"
 
     proc open (driver) {
         print.error "driver.open: $driver"
@@ -39,7 +52,7 @@ type blipt.driver {
     proc export_methods (driver) {
         print.error "export_methods"
         set tcl <$driver tcl>
-        export $tcl reload
+        export $tcl reload run_link_command
     }
     proc load_config (driver) {
         print.error "load_config"
@@ -178,6 +191,56 @@ type blipt.driver {
         set $tcl text $text
         set $tcl tag $tag
         run $tcl {{ change_doc {$doc insert end "$text" $tag} }}
+    }
+
+    proc get_element_index (driver) {
+        set $driver (element_index $($element_index + 1))
+        return <$driver element_index>
+    }
+
+    proc run_link_command (driver element_index) {
+        print.error "running link command $element_index"
+        set subprogram <$driver link_commands "$element_index">
+        scope "run link command $element_index" $subprogram
+    }
+    proc _link (driver text subprogram tag) {
+        get_element_index $driver | as element_index
+        print.error "element_index: $element_index"
+
+        set link_commands <$driver link_commands>
+        print.error "LINK COMMANDS: $link_commands"
+        set $link_commands ("$element_index" $subprogram)
+
+        set tcl <$driver tcl>
+        set $tcl element_index $element_index
+        run $tcl {{
+            $doc tag bind link_$element_index <1> {
+                puts "run_link_command $element_index"
+                run_link_command \$driver $element_index
+            }
+        }}
+        add $driver $text "link_$element_index $tag"
+        print.error "link created"
+    }
+    proc link (driver text subprogram) {
+        _link $driver $text $subprogram link
+    }
+    proc fixed_link (driver text subprogram) {
+        _link $driver $text $subprogram fixed_link
+    }
+    proc br (driver) {
+        set tcl <$driver tcl>
+        run $tcl {{ change_doc {$doc insert end "\n"} }}
+    }
+    proc hr (driver) {
+        set tcl <$driver tcl>
+        run $tcl {{ change_doc {$doc insert end "----------\n"} }}
+    }
+    proc cls (driver) {
+        set tcl <$driver tcl>
+        run $tcl {{ $doc delete 0.0 end }}
+        # gc::clean
+        # update
     }
 
     proc run (driver) {
