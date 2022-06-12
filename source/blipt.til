@@ -1,0 +1,192 @@
+type blipt.driver {
+    proc init (title) {
+        print.error "driver.init"
+        return [dict
+            . (current_page "home")
+            . (history ())
+            . (current_title $title)
+            . (doc ".document.body")
+        ]
+    }
+
+    # Some dynamic procedures:
+    range (h1 h2 h3 h4 p) | foreach tag {
+        eval 'set subprogram {
+            add \$driver "\$text\\n" $tag
+        }'
+        print.error "proc $tag"
+        proc $tag (driver text) $subprogram
+    }
+
+    proc open (driver) {
+        print.error "driver.open: $driver"
+        tcl | as tcl
+        open $tcl
+        dict.set $driver (tcl $tcl)
+        set $tcl doc <$driver doc>
+
+        export_methods $driver
+        load_config $driver
+        create_gui $driver
+        configure_tags $driver
+        create_tcl_procedures $driver
+        bind_keys $driver
+        print.error " open: done"
+    }
+    proc close (driver) {
+        close <$driver tcl>
+    }
+    proc export_methods (driver) {
+        print.error "export_methods"
+        set tcl <$driver tcl>
+        export $tcl reload
+    }
+    proc load_config (driver) {
+        print.error "load_config"
+        list
+        . (h1font "Fira Sans Heavy")
+        . (hfont "Fira Sans ExtraBold")
+        . (pfont "Fira Sans Light")
+        . (fxfont "Fira Code Light")
+        . (base_font_size 14)
+        | range | foreach pair {
+            set (key value) $pair
+            set <$driver tcl> $key $value
+        }
+    }
+    proc create_gui (driver) {
+        print.error "create_gui"
+        set tcl <$driver tcl>
+
+        run $tcl {{
+            package require Tk
+            wm geometry . 100x20
+            wm title . "Blipt!"
+
+            frame .document -background white -height 100
+
+            ttk::label .document.background -background orange
+            place .document.background -x 0 -y 0 -relwidth 1 -relheight 1
+
+            text .document.body \
+                -background LemonChiffon2 \
+                -foreground black \
+                -setgrid true \
+                -wrap word \
+                -padx 30 -pady 15
+            ttk::scrollbar .document.scroll -command {.document.body yview}
+
+            pack .document.scroll -side right -fill y
+            pack .document.body -expand yes -fill both
+            pack .document -expand yes -fill both
+
+            focus .document.body
+            .document.body configure -state disabled
+        }}
+    }
+    proc bind_keys (driver) {
+        print.error "bind_keys"
+        run <$driver tcl> {{
+            bind $doc q {
+                exit 0
+            }
+
+            # Make mouse wheel work as expected over various elements:
+            bind TLabel <Button-3> {
+                event generate $doc <Button-3>
+            }
+            bind TLabel <Button-4> {
+                event generate $doc <Button-4>
+            }
+            bind TLabel <Button-5> {
+                event generate $doc <Button-5>
+            }
+            bind Frame <Button-3> {
+                event generate $doc <Button-3>
+            }
+            bind Frame <Button-4> {
+                event generate $doc <Button-4>
+            }
+            bind Frame <Button-5> {
+                event generate $doc <Button-5>
+            }
+
+            bind $doc h "go_back {\$driver}"
+            bind $doc j "scroll_down {\$driver}"
+            bind $doc k "scroll_up {\$driver}"
+            bind $doc J "scroll_down_more {\$driver}"
+            bind $doc K "scroll_up_more {\$driver}"
+            bind $doc <3> "go_back {\$driver}"
+            bind $doc r "reload {\$driver}"
+            bind $doc p {
+                set c [blipt::get_current_place]
+                puts $c
+                clipboard clear
+                clipboard append -format STRING $c
+            }
+
+        }}
+    }
+    proc configure_tags (driver) {
+        print.error "configure_tags"
+        run <$driver tcl> {{
+            $doc tag configure h1 -font \
+                "-family {$h1font} -size [expr $base_font_size + 20]"
+            $doc tag configure h2 -font \
+                "-family {$hfont} -size [expr $base_font_size + 12]"
+            $doc tag configure h3 -font \
+                "-family {$hfont} -size [expr $base_font_size + 6]"
+            $doc tag configure h4 -font \
+                "-family {$hfont} -size [expr $base_font_size + 4]"
+            $doc tag configure h5 -font \
+                "-family {$hfont} -size [expr $base_font_size + 2]"
+            $doc tag configure p -font \
+                "-family {$pfont} -size $base_font_size"
+            $doc tag configure small -font \
+                "-family {$pfont} -size [expr $base_font_size - 4]"
+            $doc tag configure big -font \
+                "-family {$pfont} -size [expr $base_font_size + 2]"
+            $doc tag configure bold -font \
+                "-family {$pfont} -size $base_font_size -weight bold"
+            $doc tag configure italic -font \
+                "-family {$pfont} -size $base_font_size -slant italic"
+            $doc tag configure overstrike -font \
+                "-family {$pfont} -size $base_font_size -overstrike true"
+            $doc tag configure fixed -font \
+                "-family {$fxfont} -size $base_font_size"
+            $doc tag configure link -font \
+                "-family {$pfont} -size $base_font_size" -foreground red
+            $doc tag configure fixed_link -font \
+                "-family {$fxfont} -size [expr $base_font_size + 2]" -foreground red
+        }}
+    }
+    proc create_tcl_procedures (driver) {
+        print.error "create_tcl_procedures"
+        run <$driver tcl> {{
+            proc change_doc {cmd} {
+                variable doc
+
+                $doc configure -state normal
+                uplevel 1 $cmd
+                $doc configure -state disabled
+                # update
+            }
+        }}
+    }
+    proc add (driver text tag) {
+        set tcl <$driver tcl>
+        set $tcl text $text
+        set $tcl tag $tag
+        run $tcl {{ change_doc {$doc insert end "$text" $tag} }}
+    }
+
+    proc run (driver) {
+        run <$driver tcl> {{
+            vwait forever
+        }}
+    }
+
+    proc reload (driver) {
+        print "RELOAD"
+    }
+}

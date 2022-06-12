@@ -24,5 +24,26 @@ next few years.
 ## Usage
 
 ```tcl
-# TODO
+include "source/blipt.til"
+
+# Create your Blipt! driver:
+blipt.driver "teste" | autoclose | as driver
+
+# Then you can create your document:
+with $driver {
+    h1 'This is the "title" -- set} in Til'
+    h2 "And this is a subtitle"
+    p "And this is a simple paragraph"
+
+    h3 "Level 3 title"
+    p "Another paragraph"
+    p "Another paragraph"
+
+    h4 "Level 4 title"
+    p "Another paragraph"
+    p "Another paragraph"
+}
+
+# And run it to show the main window:
+run $driver
 ```
