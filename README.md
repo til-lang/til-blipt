@@ -31,7 +31,11 @@ blipt.driver "teste" | autoclose | as driver
 
 # Then you can create your document:
 with $driver {
+    # (I'm using weird character to show that
+    # you don't need to worry about how Tcl
+    # is going to interpret the strings:)
     h1 'This is the "title" -- set} in Til'
+
     h2 "And this is a subtitle"
     p "And this is a simple paragraph"
 
@@ -47,3 +51,5 @@ with $driver {
 # And run it to show the main window:
 run $driver
 ```
+
+![screenshot of the result](https://user-images.githubusercontent.com/8899756/173213611-a2acdb84-0f38-49dd-997b-9a79173f15f0.png)
