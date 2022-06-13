@@ -6,14 +6,15 @@ type blipt.driver {
             . (current_title $title)
             . (doc ".document.body")
             . (history ())
-            . (link_commands [dict])
-            . (element_index 0)
+            . (commands [dict])
+            . (temp_commands [dict])
+            . (next_index 0)
         ]
     }
 
     # Some dynamic procedures:
     # For automatic line-breaking tags:
-    range (h1 h2 h3 h4 h5) | foreach tag {
+    range (h1 h2 h3 h4 h5 p) | foreach tag {
         eval 'set subprogram {
             add \$driver "\$text\\n" $tag
         }'
@@ -21,9 +22,9 @@ type blipt.driver {
         proc $tag (driver text) $subprogram
     }
     # No line-breaking tags:
-    range (p big small italic bold overstrike fixed) | foreach tag {
+    range (normal big small italic bold overstrike fixed) | foreach tag {
         eval 'set subprogram {
-            add \$driver "\$text\\n" $tag
+            add \$driver "\$text" $tag
         }'
         print.error "proc $tag"
         proc $tag (driver text) $subprogram
@@ -52,7 +53,7 @@ type blipt.driver {
     proc export_methods (driver) {
         print.error "export_methods"
         set tcl <$driver tcl>
-        export $tcl reload run_link_command
+        export $tcl reload run_command run_temp_command
     }
     proc load_config (driver) {
         print.error "load_config"
@@ -155,6 +156,8 @@ type blipt.driver {
                 "-family {$hfont} -size [expr $base_font_size + 2]"
             $doc tag configure p -font \
                 "-family {$pfont} -size $base_font_size"
+            $doc tag configure normal -font \
+                "-family {$pfont} -size $base_font_size"
             $doc tag configure small -font \
                 "-family {$pfont} -size [expr $base_font_size - 4]"
             $doc tag configure big -font \
@@ -192,34 +195,70 @@ type blipt.driver {
         set $tcl tag $tag
         run $tcl {{ change_doc {$doc insert end "$text" $tag} }}
     }
-
-    proc get_element_index (driver) {
-        set $driver (element_index $($element_index + 1))
-        return <$driver element_index>
+    proc tk (driver command) {
+        run <$driver tcl> $command
+    }
+    proc add_window (driver name) {
+        run <$driver tcl> '\$doc window create end -window "$name" -align center'
     }
 
-    proc run_link_command (driver element_index) {
-        print.error "running link command $element_index"
-        set subprogram <$driver link_commands "$element_index">
-        scope "run link command $element_index" $subprogram
+    proc run_after.once (driver time subprogram) {
+        get_next_index $driver | as index
+        register_command.temp $driver $index $subprogram
+
+        run <$driver tcl> "after $time { run_temp_command \\\$driver $index  }"
     }
+    proc run_after (driver time key) {
+        run <$driver tcl> "after $time { run_command \\\$driver $key  }"
+    }
+
+    proc get_next_index (driver) {
+        set $driver (next_index $($next_index + 1))
+        return <$driver next_index>
+    }
+
+    proc register_command (driver key subprogram) {
+        print.error "register_command $key: $subprogram"
+        set commands <$driver commands>
+        set $commands ("$key" $subprogram)
+        print.error "commands: $commands"
+    }
+    proc register_command.temp (driver key subprogram) {
+        set temp_commands <$driver temp_commands>
+        set $temp_commands ("$key" $subprogram)
+    }
+    proc run_command (driver key) {
+        print.error "running command $key"
+        set subprogram <$driver commands "$key">
+        scope "run command $key" $subprogram
+    }
+    proc run_temp_command (driver key) {
+        print.error "running temp command $key"
+        set subprogram <$driver temp_commands "$key">
+
+        # Run it!
+        scope "run temp command $key" $subprogram
+        # Isn't `scope` a beautiful command? Yeah, I think it is.
+
+        unset <$driver temp_commands> $key
+        print.error "temp_commands, after running $key: " <$driver temp_commands>
+    }
+
     proc _link (driver text subprogram tag) {
-        get_element_index $driver | as element_index
-        print.error "element_index: $element_index"
+        get_next_index $driver | as next_index
+        print.error "next_index: $next_index"
 
-        set link_commands <$driver link_commands>
-        print.error "LINK COMMANDS: $link_commands"
-        set $link_commands ("$element_index" $subprogram)
+        set key "link_$next_index"
+        register_command $driver $key $subprogram
 
         set tcl <$driver tcl>
-        set $tcl element_index $element_index
+        set $tcl key $key
         run $tcl {{
-            $doc tag bind link_$element_index <1> {
-                puts "run_link_command $element_index"
-                run_link_command \$driver $element_index
+            $doc tag bind $key <1> {
+                run_command \$driver "$key"
             }
         }}
-        add $driver $text "link_$element_index $tag"
+        add $driver $text "$key $tag"
         print.error "link created"
     }
     proc link (driver text subprogram) {
