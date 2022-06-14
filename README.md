@@ -43,9 +43,19 @@ with $driver {
     p "Another paragraph"
     p "Another paragraph"
 
-    h4 "Level 4 title"
-    p "Another paragraph"
-    p "Another paragraph"
+    h4 "A clock:"
+
+    # You can use some Tk things directly, also:
+    tk "ttk::label .special_paragraph -text 0 -background LemonChiffon2"
+    add_window ".special_paragraph"
+    br
+
+    register_command teste {
+        extract [exec date "+%H:%M:%S" | collect] 0 | as time
+        tk $driver ".special_paragraph configure -text {$time}"
+        run_after $driver 1000 teste
+    }
+    run_after 1000 teste
 }
 
 # And run it to show the main window:
